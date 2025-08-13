@@ -332,15 +332,18 @@ def _parse_front_matter(text: str) -> Tuple[Optional[str], str]:
     return None, text
 
 
-def _ensure_front_matter(created_date: str) -> None:
+def _ensure_front_matter(created_date: str, model_name: str) -> None:
     log_file = _get_or_create_log_file()
     current = _read_text(log_file)
     fm, body = _parse_front_matter(current)
     if fm is None:
+        import json as _json
+        base_tags = ["LLM Chat", model_name]
+        tags_yaml = "\n".join([f"  - {_json.dumps(t)}" for t in base_tags])
         fm_block = (
             f"---\n"
             f"title: \"\"\n"
-            f"tags: []\n"
+            f"tags:\n{tags_yaml}\n"
             f"created: \"{created_date}\"\n"
             f"modified: \"{created_date}\"\n"
             f"---\n"
@@ -348,7 +351,7 @@ def _ensure_front_matter(created_date: str) -> None:
         _write_text(log_file, fm_block + body)
 
 
-def _update_front_matter(title: Optional[str], tags: Optional[List[str]], created_fallback: str) -> None:
+def _update_front_matter(title: Optional[str], tags: Optional[List[str]], created_fallback: str, model_name: str) -> None:
     log_file = _get_or_create_log_file()
     current = _read_text(log_file)
     fm, body = _parse_front_matter(current)
@@ -370,13 +373,18 @@ def _update_front_matter(title: Optional[str], tags: Optional[List[str]], create
     # sanitize and JSON-escape for YAML values
     safe_title = title or ""
     safe_title_json = json.dumps(safe_title)
-    tag_list = tags or []
-    quoted_tags = ", ".join([json.dumps(str(t)) for t in tag_list])
+    # Merge base tags with summary-proposed tags, de-duplicated while preserving order
+    merged_tags: List[str] = []
+    for t in ["LLM Chat", model_name] + (tags or []):
+        st = str(t)
+        if st not in merged_tags:
+            merged_tags.append(st)
+    tags_block = "\n".join([f"  - {json.dumps(t)}" for t in merged_tags])
     modified = datetime.now().strftime("%Y-%m-%d")
     new_fm_block = (
         f"---\n"
         f"title: {safe_title_json}\n"
-        f"tags: [{quoted_tags}]\n"
+        f"tags:\n{tags_block}\n"
         f"created: \"{created}\"\n"
         f"modified: \"{modified}\"\n"
         f"---\n"
@@ -431,7 +439,7 @@ def respond(message: str, history: List[Tuple[str, str]], model_name: str) -> Ge
     selected_model = model_name if model_name in SUPPORTED_MODELS else SUPPORTED_MODELS[0]
     # Logging: ensure YAML front-matter exists and write the user message
     created_date = datetime.now().strftime("%Y-%m-%d")
-    _ensure_front_matter(created_date)
+    _ensure_front_matter(created_date, selected_model)
     _append_user_message(message)
 
     # Stream while accumulating for final write
@@ -444,7 +452,7 @@ def respond(message: str, history: List[Tuple[str, str]], model_name: str) -> Ge
         _append_assistant_message(accumulated, selected_model)
         # Update YAML header with summarized title and tags
         title, tags = _summarize_title_and_tags(conversation + [{"role": "assistant", "content": accumulated}])
-        _update_front_matter(title, tags, created_date)
+        _update_front_matter(title, tags, created_date, selected_model)
 
 
 def build_interface() -> gr.Blocks:
