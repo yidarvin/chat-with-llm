@@ -11,6 +11,7 @@ python = ">=3.9,<3.13"
 openai = ">=1.35.0"
 gradio = ">=4.44.0"
 python-dotenv = ">=1.0.1"
+anthropic = ">=0.33.0"
 
 [tool.poetry.scripts]
 chat-with-llm = "app.main:main"

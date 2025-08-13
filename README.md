@@ -48,3 +48,13 @@ Gradio will print a local URL you can open in your browser.
 
 - The app uses the environment variable `OPENAI_API_KEY` loaded from `.env` via `python-dotenv`.
 - The model is set to `gpt-5`. You can change it in `app/main.py` if desired.
+
+## Anthropic (Claude) support
+
+To enable Anthropic models (e.g., Claude Opus 4.1), add the following to your `.env`:
+
+```bash
+ANTHROPIC_API_KEY=sk-ant-api-key-here
+```
+
+Then select `claude-opus-4-1-20250805` in the model dropdown.
