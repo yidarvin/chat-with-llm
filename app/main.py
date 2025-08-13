@@ -16,6 +16,11 @@ SUPPORTED_MODELS: List[str] = [
     "o4-mini-deep-research",
     "o3",
     "claude-opus-4-1-20250805",
+    "claude-opus-4-20250514",
+    "claude-sonnet-4-20250514",
+    "claude-3-7-sonnet-latest",
+    "claude-3-5-sonnet-latest",
+    "claude-3-5-haiku-latest",
 ]
 
 CHAT_MODELS: List[str] = [
@@ -33,6 +38,11 @@ RESPONSES_ONLY_MODELS: List[str] = [
 
 ANTHROPIC_MODELS: List[str] = [
     "claude-opus-4-1-20250805",
+    "claude-opus-4-20250514",
+    "claude-sonnet-4-20250514",
+    "claude-3-7-sonnet-latest",
+    "claude-3-5-sonnet-latest",
+    "claude-3-5-haiku-latest",
 ]
 
 
