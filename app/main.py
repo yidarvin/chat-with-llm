@@ -276,7 +276,7 @@ def generate_response_stream(messages: List[dict], model_name: str) -> Generator
             yield fallback
 
 
-LOG_DIR: Path = Path.cwd() / "chatlogs"
+LOG_DIR: Path = Path(os.getenv("CHATLOGS_DIR", str((Path.cwd() / "chatlogs").resolve())))
 LOG_PATH: Optional[Path] = None
 
 
@@ -296,8 +296,11 @@ def _get_or_create_log_file() -> Path:
 
 def _append_log_line(text: str) -> None:
     log_file = _get_or_create_log_file()
-    with log_file.open("a", encoding="utf-8") as f:
-        f.write(text)
+    try:
+        with log_file.open("a", encoding="utf-8") as f:
+            f.write(text)
+    except Exception as e:
+        print(f"[chatlogs] Failed to write log: {e}")
 
 
 def _append_user_message(content: str) -> None:
@@ -475,7 +478,13 @@ def main() -> None:
         raise RuntimeError("OPENAI_API_KEY is not set. Create a .env file with your key.")
     demo = build_interface()
     demo.queue()
-    demo.launch()
+    # Allow host/port override for containerized runs
+    host = os.getenv("GRADIO_SERVER_NAME", "0.0.0.0")
+    try:
+        port = int(os.getenv("PORT", "7860"))
+    except Exception:
+        port = 7860
+    demo.launch(server_name=host, server_port=port)
 
 
 if __name__ == "__main__":
