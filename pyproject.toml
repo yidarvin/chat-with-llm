@@ -1,0 +1,22 @@
+[tool.poetry]
+name = "chat-with-llm"
+version = "0.1.0"
+description = "Simple Gradio chatbot powered by OpenAI GPT-5"
+authors = ["Your Name <you@example.com>"]
+readme = "README.md"
+packages = [{ include = "app" }]
+
+[tool.poetry.dependencies]
+python = ">=3.9,<3.13"
+openai = ">=1.35.0"
+gradio = ">=4.44.0"
+python-dotenv = ">=1.0.1"
+
+[tool.poetry.scripts]
+chat-with-llm = "app.main:main"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+ 
