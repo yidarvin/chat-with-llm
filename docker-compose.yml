@@ -13,5 +13,5 @@ services:
     ports:
       - "7860:7860"
     volumes:
-      - ./chatlogs:/app/chatlogs
+      - /home/darvin/Data/dodoland/darvin/obsidian/dodoland/chatlogs:/app/chatlogs
     restart: unless-stopped
