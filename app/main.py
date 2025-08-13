@@ -16,6 +16,7 @@ SUPPORTED_MODELS: List[str] = [
     "gpt-5-mini",
     "gpt-5-nano",
     "gpt-4.1",
+    "gpt-3.5-turbo",
     "o3-deep-research",
     "o4-mini-deep-research",
     "o3",
@@ -35,6 +36,7 @@ CHAT_MODELS: List[str] = [
     "gpt-5-mini",
     "gpt-5-nano",
     "gpt-4.1",
+    "gpt-3.5-turbo",
 ]
 
 RESPONSES_ONLY_MODELS: List[str] = [
