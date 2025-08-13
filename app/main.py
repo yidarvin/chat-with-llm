@@ -432,6 +432,10 @@ def _summarize_title_and_tags(messages: List[dict]) -> Tuple[Optional[str], Opti
 
 
 def respond(message: str, history: List[Tuple[str, str]], model_name: str) -> Generator[str, None, None]:
+    # Start a fresh log file if this is a new conversation (empty history)
+    if not history:
+        global LOG_PATH
+        LOG_PATH = None
     conversation: List[dict] = []
     for user_msg, assistant_msg in history:
         if user_msg:
