@@ -1,4 +1,5 @@
 import os
+import json
 from datetime import datetime
 from pathlib import Path
 from typing import Generator, List, Tuple, Optional
@@ -307,17 +308,114 @@ def _append_assistant_message(content: str, model_name: str) -> None:
     _append_log_line(f"\n\n## [{timestamp}] AI ({model_name})\n\n{content}\n")
 
 
-def _append_session_header_if_new(model_name: str) -> None:
+def _read_text(p: Path) -> str:
+    try:
+        return p.read_text(encoding="utf-8")
+    except Exception:
+        return ""
+
+
+def _write_text(p: Path, text: str) -> None:
+    p.write_text(text, encoding="utf-8")
+
+
+def _parse_front_matter(text: str) -> Tuple[Optional[str], str]:
+    """Return (front_matter_block, body) where front_matter_block excludes trailing '---'."""
+    if text.startswith("---\n"):
+        end = text.find("\n---\n", 4)
+        if end != -1:
+            fm = text[4:end]
+            body = text[end + 5 :]
+            return fm, body
+    return None, text
+
+
+def _ensure_front_matter(created_date: str) -> None:
     log_file = _get_or_create_log_file()
-    # If file is new/empty, add a header
-    if log_file.stat().st_size == 0:
-        started = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        header = (
-            f"# Chat Session\n\n"
-            f"- **Started**: {started}\n\n"
-            f"- **Initial Model**: {model_name}\n"
+    current = _read_text(log_file)
+    fm, body = _parse_front_matter(current)
+    if fm is None:
+        fm_block = (
+            f"---\n"
+            f"title: \"\"\n"
+            f"tags: []\n"
+            f"created: \"{created_date}\"\n"
+            f"modified: \"{created_date}\"\n"
+            f"---\n"
         )
-        _append_log_line(header)
+        _write_text(log_file, fm_block + body)
+
+
+def _update_front_matter(title: Optional[str], tags: Optional[List[str]], created_fallback: str) -> None:
+    log_file = _get_or_create_log_file()
+    current = _read_text(log_file)
+    fm, body = _parse_front_matter(current)
+    created = created_fallback
+    if fm is not None:
+        # crude parse of existing fields
+        for line in fm.splitlines():
+            if line.strip().startswith("created:"):
+                # value inside quotes
+                idx = line.find('"')
+                if idx != -1:
+                    created = line[idx + 1 : line.find('"', idx + 1)] or created_fallback
+                else:
+                    # value may be after colon without quotes
+                    parts = line.split(":", 1)
+                    if len(parts) == 2:
+                        created = parts[1].strip().strip('"') or created_fallback
+                break
+    # sanitize and JSON-escape for YAML values
+    safe_title = title or ""
+    safe_title_json = json.dumps(safe_title)
+    tag_list = tags or []
+    quoted_tags = ", ".join([json.dumps(str(t)) for t in tag_list])
+    modified = datetime.now().strftime("%Y-%m-%d")
+    new_fm_block = (
+        f"---\n"
+        f"title: {safe_title_json}\n"
+        f"tags: [{quoted_tags}]\n"
+        f"created: \"{created}\"\n"
+        f"modified: \"{modified}\"\n"
+        f"---\n"
+    )
+    _write_text(log_file, new_fm_block + body)
+
+
+def _summarize_title_and_tags(messages: List[dict]) -> Tuple[Optional[str], Optional[List[str]]]:
+    """Use OpenAI gpt-3.5-turbo to create a short title and 3-7 relevant tags."""
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        return None, None
+    try:
+        client = OpenAI()
+        # Limit to last 24 turns to control prompt size
+        trimmed = messages[-24:]
+        prompt = (
+            "Summarize the chat into a concise title (<= 8 words) and 3-7 lowercase tags.\n"
+            "Respond ONLY in JSON with keys: title (string), tags (string array)."
+        )
+        completion = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": prompt},
+                {"role": "user", "content": str(trimmed)},
+            ],
+            temperature=0,
+        )
+        content = completion.choices[0].message.content or "{}"
+        import json as _json
+
+        data = _json.loads(content)
+        title = data.get("title")
+        tags = data.get("tags")
+        if isinstance(tags, list):
+            tags = [str(t) for t in tags]
+        else:
+            tags = None
+        return (str(title) if title else None), tags
+    except Exception:
+        return None, None
 
 
 def respond(message: str, history: List[Tuple[str, str]], model_name: str) -> Generator[str, None, None]:
@@ -329,8 +427,9 @@ def respond(message: str, history: List[Tuple[str, str]], model_name: str) -> Ge
             conversation.append({"role": "assistant", "content": assistant_msg})
     conversation.append({"role": "user", "content": message})
     selected_model = model_name if model_name in SUPPORTED_MODELS else SUPPORTED_MODELS[0]
-    # Logging: initialize file and write the user message
-    _append_session_header_if_new(selected_model)
+    # Logging: ensure YAML front-matter exists and write the user message
+    created_date = datetime.now().strftime("%Y-%m-%d")
+    _ensure_front_matter(created_date)
     _append_user_message(message)
 
     # Stream while accumulating for final write
@@ -341,6 +440,9 @@ def respond(message: str, history: List[Tuple[str, str]], model_name: str) -> Ge
 
     if accumulated:
         _append_assistant_message(accumulated, selected_model)
+        # Update YAML header with summarized title and tags
+        title, tags = _summarize_title_and_tags(conversation + [{"role": "assistant", "content": accumulated}])
+        _update_front_matter(title, tags, created_date)
 
 
 def build_interface() -> gr.Blocks:
