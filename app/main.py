@@ -1,5 +1,7 @@
 import os
-from typing import Generator, List, Tuple
+from datetime import datetime
+from pathlib import Path
+from typing import Generator, List, Tuple, Optional
 
 import gradio as gr
 from dotenv import load_dotenv
@@ -271,6 +273,53 @@ def generate_response_stream(messages: List[dict], model_name: str) -> Generator
             yield fallback
 
 
+LOG_DIR: Path = Path.cwd() / "chatlogs"
+LOG_PATH: Optional[Path] = None
+
+
+def _ensure_log_dir() -> None:
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _get_or_create_log_file() -> Path:
+    global LOG_PATH
+    _ensure_log_dir()
+    if LOG_PATH is None:
+        ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        LOG_PATH = LOG_DIR / f"{ts}.md"
+        LOG_PATH.touch(exist_ok=False)
+    return LOG_PATH
+
+
+def _append_log_line(text: str) -> None:
+    log_file = _get_or_create_log_file()
+    with log_file.open("a", encoding="utf-8") as f:
+        f.write(text)
+
+
+def _append_user_message(content: str) -> None:
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    _append_log_line(f"\n\n## [{timestamp}] Human\n\n{content}\n")
+
+
+def _append_assistant_message(content: str, model_name: str) -> None:
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    _append_log_line(f"\n\n## [{timestamp}] AI ({model_name})\n\n{content}\n")
+
+
+def _append_session_header_if_new(model_name: str) -> None:
+    log_file = _get_or_create_log_file()
+    # If file is new/empty, add a header
+    if log_file.stat().st_size == 0:
+        started = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        header = (
+            f"# Chat Session\n\n"
+            f"- **Started**: {started}\n\n"
+            f"- **Initial Model**: {model_name}\n"
+        )
+        _append_log_line(header)
+
+
 def respond(message: str, history: List[Tuple[str, str]], model_name: str) -> Generator[str, None, None]:
     conversation: List[dict] = []
     for user_msg, assistant_msg in history:
@@ -280,7 +329,18 @@ def respond(message: str, history: List[Tuple[str, str]], model_name: str) -> Ge
             conversation.append({"role": "assistant", "content": assistant_msg})
     conversation.append({"role": "user", "content": message})
     selected_model = model_name if model_name in SUPPORTED_MODELS else SUPPORTED_MODELS[0]
-    yield from generate_response_stream(conversation, selected_model)
+    # Logging: initialize file and write the user message
+    _append_session_header_if_new(selected_model)
+    _append_user_message(message)
+
+    # Stream while accumulating for final write
+    accumulated = ""
+    for chunk in generate_response_stream(conversation, selected_model):
+        accumulated = chunk
+        yield chunk
+
+    if accumulated:
+        _append_assistant_message(accumulated, selected_model)
 
 
 def build_interface() -> gr.Blocks:
