@@ -58,3 +58,13 @@ ANTHROPIC_API_KEY=sk-ant-api-key-here
 ```
 
 Then select `claude-opus-4-1-20250805` in the model dropdown.
+
+## Google Gemini support
+
+To enable Google Gemini (e.g., `gemini-2.5-pro`), add the following to your `.env`:
+
+```bash
+GOOGLE_API_KEY=your-google-genai-api-key
+```
+
+Then select `gemini-2.5-pro`, `gemini-2.5-flash`, or `gemini-2.5-flash-lite` in the model dropdown.

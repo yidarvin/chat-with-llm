@@ -5,6 +5,7 @@ import gradio as gr
 from dotenv import load_dotenv
 from openai import OpenAI
 from anthropic import Anthropic
+import google.generativeai as genai
 
 
 SUPPORTED_MODELS: List[str] = [
@@ -21,6 +22,9 @@ SUPPORTED_MODELS: List[str] = [
     "claude-3-7-sonnet-latest",
     "claude-3-5-sonnet-latest",
     "claude-3-5-haiku-latest",
+    "gemini-2.5-pro",
+    "gemini-2.5-flash",
+    "gemini-2.5-flash-lite",
 ]
 
 CHAT_MODELS: List[str] = [
@@ -43,6 +47,12 @@ ANTHROPIC_MODELS: List[str] = [
     "claude-3-7-sonnet-latest",
     "claude-3-5-sonnet-latest",
     "claude-3-5-haiku-latest",
+]
+
+GEMINI_MODELS: List[str] = [
+    "gemini-2.5-pro",
+    "gemini-2.5-flash",
+    "gemini-2.5-flash-lite",
 ]
 
 
@@ -113,6 +123,39 @@ def generate_response(messages: List[dict], model_name: str) -> str:
                 return "".join(part.text for part in resp.content if getattr(part, "type", "") == "text")
             except Exception:
                 return str(resp)
+        elif model_name in GEMINI_MODELS:
+            # Configure from env var
+            api_key = os.getenv("GOOGLE_API_KEY")
+            if not api_key:
+                return "[Error] GOOGLE_API_KEY is not set in the environment/.env"
+            genai.configure(api_key=api_key)
+            # Build history excluding the last user turn; send that as the prompt
+            history = []
+            system_instruction = None
+            last_user_text = ""
+            if messages:
+                # Identify last user message
+                for m in reversed(messages):
+                    if m.get("role") == "user":
+                        last_user_text = m.get("content", "")
+                        break
+            for m in messages:
+                role = m.get("role", "user")
+                content = m.get("content", "")
+                if role == "system":
+                    system_instruction = content
+                elif role == "assistant":
+                    history.append({"role": "model", "parts": [content]})
+                elif role == "user" and content != last_user_text:
+                    history.append({"role": "user", "parts": [content]})
+
+            model = genai.GenerativeModel(model_name if model_name else "gemini-2.5-pro", system_instruction=system_instruction)
+            chat = model.start_chat(history=history)
+            try:
+                resp = chat.send_message(last_user_text)
+                return getattr(resp, "text", None) or ""
+            except Exception as e:
+                return f"[Error] {e}"
         else:
             resp = client.chat.completions.create(
                 model=model_name,
@@ -173,6 +216,40 @@ def generate_response_stream(messages: List[dict], model_name: str) -> Generator
                         if piece:
                             acc += piece
                             yield acc
+        elif model_name in GEMINI_MODELS:
+            api_key = os.getenv("GOOGLE_API_KEY")
+            if not api_key:
+                yield "[Error] GOOGLE_API_KEY is not set in the environment/.env"
+                return
+            genai.configure(api_key=api_key)
+            history = []
+            system_instruction = None
+            last_user_text = ""
+            if messages:
+                for m in reversed(messages):
+                    if m.get("role") == "user":
+                        last_user_text = m.get("content", "")
+                        break
+            for m in messages:
+                role = m.get("role", "user")
+                content = m.get("content", "")
+                if role == "system":
+                    system_instruction = content
+                elif role == "assistant":
+                    history.append({"role": "model", "parts": [content]})
+                elif role == "user" and content != last_user_text:
+                    history.append({"role": "user", "parts": [content]})
+            model = genai.GenerativeModel(model_name if model_name else "gemini-2.5-pro", system_instruction=system_instruction)
+            chat = model.start_chat(history=history)
+            acc = ""
+            try:
+                for chunk in chat.send_message(last_user_text, stream=True):
+                    if getattr(chunk, "text", None):
+                        acc += chunk.text
+                        yield acc
+            except Exception as e:
+                yield f"[Error] {e}"
+                return
         else:
             stream = client.chat.completions.create(
                 model=model_name,
