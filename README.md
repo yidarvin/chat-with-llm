@@ -5,7 +5,6 @@ A minimal Gradio chat UI powered by different LLM's, managed with Poetry.
 ## Prerequisites
 
 - Python 3.9–3.12
-- Poetry (`p` or `pip install --user poetry`)
 
 ## Setup
 
@@ -30,19 +29,52 @@ OPENAI_API_KEY=sk-your-api-key-here
 
 You can create an API key from your OpenAI account settings.
 
-3) Install dependencies with Poetry
+3) Create and activate a Python virtual environment, then install Poetry into it
 
 ```bash
-poetry install
+python3 -m venv .venv
+source .venv/bin/activate   # Windows: .venv\\Scripts\\activate
+pip install --upgrade pip
+pip install poetry
 ```
 
-4) Run the app
+4) Install dependencies with Poetry (inside the activated venv)
+
+```bash
+POETRY_VIRTUALENVS_CREATE=false poetry install
+```
+
+5) Run the app
 
 ```bash
 poetry run chat-with-llm
 ```
 
-Gradio will print a local URL you can open in your browser.
+Gradio will print a local URL you can open in your browser. To exit the environment later, run `deactivate`.
+
+### Using Poetry inside a Python virtual environment (recommended)
+
+If you want to keep Poetry and all dependencies isolated in a venv:
+
+```bash
+# 1) Create and activate a venv
+python3 -m venv .venv
+source .venv/bin/activate   # Windows: .venv\\Scripts\\activate
+
+# 2) Install Poetry into this venv
+pip install --upgrade pip
+pip install poetry
+
+# 3) Tell Poetry to use the currently active venv (avoid creating a second venv)
+POETRY_VIRTUALENVS_CREATE=false poetry install
+
+# 4) Run the app (either works)
+poetry run chat-with-llm
+# or
+python -m app.main
+```
+
+You can later re-activate the environment with `source .venv/bin/activate` and run the same commands.
 
 ## Docker
 
